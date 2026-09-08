@@ -119,6 +119,7 @@ def main() -> int:
     main_win.settings_clicked.connect(controller.open_settings)
     main_win.open_history.connect(controller.open_history_record)
     tray.toggle_requested.connect(toggle_main)
+    tray.capture_requested.connect(controller.start_capture)
     tray.fullscreen_requested.connect(controller.start_fullscreen)
     tray.quit_requested.connect(app.quit)
     ocr.signals.finished.connect(controller.on_ocr_done)

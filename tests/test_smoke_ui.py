@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import sys
+import tempfile
 from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -24,8 +25,10 @@ def main() -> int:
     from src.theme import apply_theme
     apply_theme(app)
 
-    config = Config()
-    history = HistoryStore(limit=5)
+    # 用独立临时目录，避免污染真实数据
+    tmp_root = Path(tempfile.mkdtemp(prefix="screenscan_test_"))
+    config = Config(path=tmp_root / "config.json")
+    history = HistoryStore(root=tmp_root / "history", limit=5)
     ocr = OcrEngine()
     signals = HotkeySignals()
 

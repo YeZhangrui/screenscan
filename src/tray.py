@@ -11,6 +11,7 @@ from .hotkeys import pretty_hotkey
 
 class Tray(QSystemTrayIcon):
     toggle_requested = Signal()
+    capture_requested = Signal()
     fullscreen_requested = Signal()
     quit_requested = Signal()
 
@@ -20,6 +21,8 @@ class Tray(QSystemTrayIcon):
         menu = QMenu()
         act_show = menu.addAction("显示主窗口")
         act_show.triggered.connect(self.toggle_requested.emit)
+        act_cap = menu.addAction("框选识别")
+        act_cap.triggered.connect(self.capture_requested.emit)
         act_full = menu.addAction("全屏扫描")
         act_full.triggered.connect(self.fullscreen_requested.emit)
         menu.addSeparator()

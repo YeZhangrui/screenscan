@@ -164,6 +164,7 @@ class AppController(QObject):
         if dlg.exec():
             self.main_win.refresh_hints()
             self.tray.update_hint(str(self.config.get("hotkey_capture", "alt+s")))
+            self.result_win.ensure_pin()
 
     def _apply_hotkeys(self, capture: str, fullscreen: str) -> str | None:
         if self.hotkey_manager is None:

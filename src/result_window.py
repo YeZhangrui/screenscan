@@ -53,12 +53,16 @@ class ResultWindow(QWidget):
         self.btn_extract = QPushButton("提取图中图片")
         self.btn_extract.setCheckable(True)
         self.btn_extract.toggled.connect(self._on_extract_toggled)
+        self.btn_save_extract = QPushButton("保存提取图片")
+        self.btn_save_extract.setEnabled(False)
+        self.btn_save_extract.clicked.connect(self.save_extract)
         self.btn_pin = QPushButton("置顶")
         self.btn_pin.setCheckable(True)
         self.btn_pin.setChecked(self._pinned)
         self.btn_pin.toggled.connect(self._on_pin_toggled)
         for b in (self.btn_copy_all, self.btn_export, self.btn_copy_img,
-                  self.btn_save_img, self.btn_extract, self.btn_pin):
+                  self.btn_save_img, self.btn_extract, self.btn_save_extract,
+                  self.btn_pin):
             b.setProperty("role", "ghost")
             top.addWidget(b)
         top.addStretch(1)
@@ -200,11 +204,27 @@ class ResultWindow(QWidget):
         crop = self._plain.copy(rect)
         self._last_extract = crop
         QGuiApplication.clipboard().setImage(crop.toImage())
+        self.btn_save_extract.setEnabled(True)
         self.label_status.setText(
-            f"已提取并复制图片区域（{crop.width()}×{crop.height()}）✓"
+            f"已提取并复制图片区域（{crop.width()}×{crop.height()}）✓ 可点「保存提取图片」存为文件"
         )
         # 退出框选模式，避免误操作
         self.btn_extract.setChecked(False)
+
+    def save_extract(self) -> None:
+        if self._last_extract is None:
+            return
+        from PySide6.QtWidgets import QFileDialog
+        from .config import APP_TITLE
+
+        default = f"提取图片_{time.strftime('%Y%m%d_%H%M%S')}.png"
+        path, _ = QFileDialog.getSaveFileName(self, "保存提取的图片", default, "PNG 图片 (*.png)")
+        if not path:
+            return
+        if self._last_extract.save(path, "PNG"):
+            self.label_status.setText(f"已保存：{path}")
+        else:
+            QMessageBox.warning(self, APP_TITLE, "保存失败，请更换路径")
 
     # ---------- 置顶 ----------
     def _on_pin_toggled(self, on: bool) -> None:
