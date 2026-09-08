@@ -5,7 +5,7 @@
 
 ## 下载
 
-- **免安装版**：到 [Releases](../../releases) 页面下载 `屏幕扫描助手.exe`，双击即用（Windows 11，无需安装 Python 或任何环境）
+- **免安装版**：到 [Releases](../../releases) 页面下载 `screenscan-v1.5.1.exe`（即「屏幕扫描助手」免安装版，双击即用，无需安装 Python 或任何环境）
 - 想自己改代码：克隆本仓库后 `pip install PySide6 rapidocr omegaconf pynput pillow numpy pyinstaller`，运行 `python main.py`；打包用 `build.ps1`
 
 ## 一、安装
