@@ -40,6 +40,9 @@ def main() -> int:
     print(f"识别 {len(items)} 项；图片 {pm.width()}x{pm.height()}（逻辑区域 {rect.width()}x{rect.height()}）")
 
     panel = OnScreenResult(pm, items, screen, rect, dpr=screen.devicePixelRatio() or 1.0)
+    if len(sys.argv) > 3 and sys.argv[3] == "processing":
+        panel = OnScreenResult(pm, [], screen, rect,
+                               dpr=screen.devicePixelRatio() or 1.0, processing=True)
     panel.show()
     panel._selected = set(range(len(items)))   # 全部高亮，便于核对框与文字对齐
     panel._update_status()

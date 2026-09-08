@@ -169,6 +169,36 @@ def test_resize(app: QApplication) -> None:
     print("PASS：浮层拖拽缩放（等比 + 下限 + 操作条跟随 + 映射一致）")
 
 
+def test_processing_then_result(app: QApplication) -> None:
+    """框选后先显示截图占位面板（正在识别），识别完成后原地升级为可交互。"""
+    screen = QGuiApplication.primaryScreen()
+    panel = OnScreenResult(make_pixmap(), [], screen, QRect(60, 60, 500, 200),
+                           dpr=1.0, processing=True)
+    panel.show()
+    app.processEvents()
+    assert panel._processing, "未进入处理中状态"
+    assert "正在识别" in panel.toolbar.label_hint.text(), panel.toolbar.label_hint.text()
+    assert not panel.toolbar.btn_copy_sel.isEnabled(), "处理中「复制选中」应为禁用"
+    assert not panel.toolbar.btn_copy_all.isEnabled(), "处理中「复制全部」应为禁用"
+    assert panel.toolbar.btn_close.isEnabled(), "处理中「关闭」应可用"
+
+    # 原地升级
+    panel.apply_result(ITEMS)
+    app.processEvents()
+    assert not panel._processing and not panel._error
+    assert len(panel.items()) == 3
+    assert panel.toolbar.btn_copy_sel.isEnabled()
+    assert "框选" in panel.toolbar.label_hint.text()
+
+    # 失败提示
+    panel.apply_error("识别失败，请重试")
+    app.processEvents()
+    assert "识别失败" in panel.toolbar.label_hint.text()
+    assert not panel.toolbar.btn_copy_sel.isEnabled()
+    panel.close()
+    print("PASS：占位面板 → 原地升级 / 失败提示")
+
+
 def test_result_multiselect(app: QApplication, tmp: Path) -> None:
     config = Config(path=tmp / "config.json")
     win = ResultWindow(config)
@@ -203,6 +233,7 @@ def main() -> int:
     test_onscreen(app)
     test_tiny_region(app)
     test_resize(app)
+    test_processing_then_result(app)
     test_result_multiselect(app, tmp)
     print("PASS：新交互测试全部通过")
     return 0

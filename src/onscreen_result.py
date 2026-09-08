@@ -77,6 +77,7 @@ class OnScreenToolbar(QWidget):
         self.btn_detail.clicked.connect(owner.open_detail.emit)
         self.btn_close = QPushButton("关闭")
         self.btn_close.clicked.connect(owner.close)
+        self._text_buttons = (self.btn_copy_sel, self.btn_copy_all, self.btn_detail)
         for b in (self.btn_copy_sel, self.btn_copy_all, self.btn_copy_img,
                   self.btn_detail, self.btn_close):
             b.setCursor(Qt.PointingHandCursor)
@@ -96,11 +97,13 @@ class OnScreenResult(QWidget):
     closed = Signal()
 
     def __init__(self, pixmap: QPixmap, items: list[dict], screen, target_rect: QRect,
-                 dpr: float = 1.0, parent=None):
+                 dpr: float = 1.0, processing: bool = False, parent=None):
         super().__init__(parent)
         self._pixmap = pixmap.copy()
         self._pixmap.setDevicePixelRatio(1.0)
         self._items = items or []
+        self._processing = bool(processing)
+        self._error = ""
         self._screen = screen
         self._selected: set[int] = set()
         self._hover: int | None = None
@@ -148,6 +151,30 @@ class OnScreenResult(QWidget):
 
         self.toolbar = OnScreenToolbar(self)
         self._update_status()
+
+    # ---------- 状态切换 ----------
+    def apply_result(self, items: list[dict]) -> None:
+        """识别完成：原地面板升级为可交互状态。"""
+        self._items = items or []
+        self._processing = False
+        self._error = ""
+        self._selected.clear()
+        self._hover = None
+        self._update_status()
+        self.update()
+
+    def apply_error(self, message: str) -> None:
+        """识别失败：面板保留截图并给出提示。"""
+        self._processing = False
+        self._error = message or "识别失败，请重试"
+        self._update_status()
+        self.update()
+
+    def pixmap(self) -> QPixmap:
+        return self._pixmap
+
+    def items(self) -> list[dict]:
+        return self._items
 
     # ---------- 操作条位置：始终在面板外面 ----------
     def _layout_toolbar(self) -> None:
@@ -289,6 +316,19 @@ class OnScreenResult(QWidget):
             p.setBrush(QColor(74, 144, 226, 40))
             p.drawRect(self._band)
 
+        # 处理中 / 失败提示：面板顶部居中的小药丸
+        if self._processing or self._error:
+            text = "正在识别…" if self._processing else self._error
+            fm = p.fontMetrics()
+            tw = fm.horizontalAdvance(text) + 30
+            th = fm.height() + 12
+            pill = QRectF((self.width() - tw) / 2.0, 10.0, tw, th)
+            p.setPen(Qt.NoPen)
+            p.setBrush(QColor(28, 42, 60, 224))
+            p.drawRoundedRect(pill, th / 2.0, th / 2.0)
+            p.setPen(QColor(255, 255, 255))
+            p.drawText(pill, Qt.AlignCenter, text)
+
         # 圆角边框（解除裁剪后绘制，保证描边完整）
         p.setClipping(False)
         p.setPen(QPen(QColor(47, 128, 214, 200), 2))
@@ -420,11 +460,22 @@ class OnScreenResult(QWidget):
 
     # ---------- 操作 ----------
     def _update_status(self) -> None:
-        n = len(self._selected)
-        self.toolbar.label_hint.setText(
-            f"已选 {n} 段文字" if n else "点击或拖拽框选文字 · 拖拽边缘可缩放"
-        )
-        self.toolbar.btn_copy_sel.setText(f"复制选中（{n}）" if n else "复制选中")
+        if self._processing:
+            self.toolbar.label_hint.setText("正在识别…")
+            for b in self.toolbar._text_buttons:
+                b.setEnabled(False)
+        elif self._error:
+            self.toolbar.label_hint.setText(self._error)
+            for b in self.toolbar._text_buttons:
+                b.setEnabled(False)
+        else:
+            n = len(self._selected)
+            self.toolbar.label_hint.setText(
+                f"已选 {n} 段文字" if n else "点击或拖拽框选文字 · 拖拽边缘可缩放"
+            )
+            self.toolbar.btn_copy_sel.setText(f"复制选中（{n}）" if n else "复制选中")
+            for b in self.toolbar._text_buttons:
+                b.setEnabled(True)
         self._layout_toolbar()
 
     def selected_text(self) -> str:

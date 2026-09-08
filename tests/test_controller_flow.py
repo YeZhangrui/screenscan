@@ -86,6 +86,22 @@ def main() -> int:
     controller.on_ocr_failed(job2, "模拟失败")
     assert main_win.label_status.text() == "识别失败"
 
+    # 5) 截图类识别：立即显示截图占位面板 → 识别完成后原地升级（截图始终留在前台）
+    from PySide6.QtCore import QRect
+    from PySide6.QtGui import QGuiApplication
+
+    screen = QGuiApplication.primaryScreen()
+    controller._process(pm, "框选识别", screen=screen, rect=QRect(0, 0, 400, 200))
+    job3 = stub.calls[-1][0]
+    panel = controller.onscreen
+    assert panel is not None, "未立即显示占位面板"
+    assert panel._processing, "占位面板未处于识别中状态"
+    items3 = [{"box": [[0, 0], [80, 0], [80, 20], [0, 20]], "text": "升级后的文字", "score": 0.9}]
+    controller.on_ocr_done(job3, items3)
+    assert controller.onscreen is panel, "未原地升级（面板被替换了）"
+    assert not panel._processing, "升级后仍处于识别中状态"
+    assert panel.items() == items3, "升级后结果未写入面板"
+
     print("PASS：控制器识别链路回归测试通过")
     return 0
 
