@@ -8,8 +8,16 @@
 """
 from __future__ import annotations
 
-from PySide6.QtCore import QPoint, QRect, Qt, Signal
-from PySide6.QtGui import QColor, QGuiApplication, QPainter, QPen, QPixmap, QPolygonF
+from PySide6.QtCore import QPoint, QRect, QRectF, Qt, Signal
+from PySide6.QtGui import (
+    QColor,
+    QGuiApplication,
+    QPainter,
+    QPainterPath,
+    QPen,
+    QPixmap,
+    QPolygonF,
+)
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -21,6 +29,7 @@ from PySide6.QtWidgets import (
 MIN_PANEL_W = 380   # 面板最小显示宽度（过小区域会自动放大，便于点选）
 MIN_PANEL_H = 170
 BAR_MARGIN = 8      # 操作条与面板的间距
+RADIUS = 10         # 圆角半径（面板与操作条保持一致）
 
 
 class OnScreenToolbar(QWidget):
@@ -33,12 +42,18 @@ class OnScreenToolbar(QWidget):
             Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
         )
         self.setAttribute(Qt.WA_ShowWithoutActivating, True)
+        # 透明窗口背景：圆角之外不出现白色方角
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         bar = QWidget()
         bar.setObjectName("Bar")
-        bar.setStyleSheet("QWidget#Bar { background: rgba(28, 42, 60, 238); border-radius: 10px; }")
+        bar.setAttribute(Qt.WA_StyledBackground, True)
+        bar.setStyleSheet(
+            "QWidget#Bar { background: rgba(28, 42, 60, 238);"
+            f" border-radius: {RADIUS}px; }}"
+        )
         outer.addWidget(bar)
 
         lay = QHBoxLayout(bar)
@@ -92,6 +107,8 @@ class OnScreenResult(QWidget):
         self.setWindowFlags(
             Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
         )
+        # 透明窗口背景 + 圆角绘制，与操作条曲率一致，避免方角违和
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setCursor(Qt.ArrowCursor)
         self.setFocusPolicy(Qt.StrongFocus)
         self.setMouseTracking(True)
@@ -143,6 +160,14 @@ class OnScreenResult(QWidget):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
         p.setRenderHint(QPainter.SmoothPixmapTransform)
+
+        # 圆角裁剪：面板四角透明，曲率与操作条一致
+        path = QPainterPath()
+        path.addRoundedRect(
+            QRectF(self.rect()).adjusted(1.0, 1.0, -1.0, -1.0), RADIUS, RADIUS
+        )
+        p.setClipPath(path)
+
         p.drawPixmap(self.rect(), self._pixmap)
 
         for idx, it in enumerate(self._items):
@@ -166,9 +191,13 @@ class OnScreenResult(QWidget):
             p.setBrush(QColor(74, 144, 226, 40))
             p.drawRect(self._band)
 
+        # 圆角边框（解除裁剪后绘制，保证描边完整）
+        p.setClipping(False)
         p.setPen(QPen(QColor(47, 128, 214, 200), 2))
         p.setBrush(Qt.NoBrush)
-        p.drawRect(self.rect().adjusted(1, 1, -2, -2))
+        p.drawRoundedRect(
+            QRectF(self.rect()).adjusted(1.0, 1.0, -1.0, -1.0), RADIUS, RADIUS
+        )
         p.end()
 
     def _to_panel(self, pt) -> QPoint:

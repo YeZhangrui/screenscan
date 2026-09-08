@@ -46,6 +46,18 @@ def test_onscreen(app: QApplication) -> None:
         f"操作条压在面板上：{panel.toolbar.geometry()} vs {panel.geometry()}"
     )
 
+    # 0.1) 圆角透明：面板与操作条四角都应为透明（不再有白色方角）
+    for name, widget in (("面板", panel), ("操作条", panel.toolbar)):
+        img = widget.grab().toImage()
+        corners = [
+            img.pixelColor(0, 0), img.pixelColor(img.width() - 1, 0),
+            img.pixelColor(0, img.height() - 1),
+            img.pixelColor(img.width() - 1, img.height() - 1),
+        ]
+        assert all(c.alpha() == 0 for c in corners), (
+            f"{name}四角不透明：{[ (c.red(), c.green(), c.blue(), c.alpha()) for c in corners ]}"
+        )
+
     # 1) 点击第 1 段 → 选中 1 段 → 复制
     QTest.mouseClick(panel, Qt.LeftButton, Qt.NoModifier, QPoint(60, 25))
     app.processEvents()
