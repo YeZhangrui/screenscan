@@ -49,7 +49,7 @@ class AppController(QObject):
         self._selecting = True
         self.main_win.hide()
         self.result_win.hide()
-        QTimer.singleShot(260, self._show_selector)
+        QTimer.singleShot(240, self._show_selector)
 
     def _show_selector(self) -> None:
         self.selector = ScreenSelector()
@@ -66,7 +66,7 @@ class AppController(QObject):
         self._selecting = False
         self.selector = None
         # 等待遮罩撤除、桌面重绘后再截屏
-        QTimer.singleShot(180, lambda: self._grab_region_and_ocr(screen, rect))
+        QTimer.singleShot(150, lambda: self._grab_region_and_ocr(screen, rect))
 
     def _grab_region_and_ocr(self, screen, rect) -> None:
         pixmap = grab_region(screen, rect)

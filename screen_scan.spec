@@ -5,8 +5,12 @@
 """
 from PyInstaller.utils.hooks import collect_all
 
-# RapidOCR 包（含 onnx 模型与 yaml 配置）整体收集
-datas, binaries, hiddenimports = collect_all("rapidocr_onnxruntime")
+# RapidOCR v6 包（含 onnx 模型、config 与 default_models.yaml）整体收集
+datas, binaries, hiddenimports = collect_all("rapidocr")
+d2, b2, h2 = collect_all("omegaconf")
+datas += d2
+binaries += b2
+hiddenimports += h2
 
 a = Analysis(
     ["main.py"],
