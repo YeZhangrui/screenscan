@@ -1,4 +1,4 @@
-"""屏幕扫描助手 - 配置与数据目录管理。"""
+﻿"""屏幕扫描助手 - 配置与数据目录管理。"""
 from __future__ import annotations
 
 import json
@@ -7,7 +7,7 @@ from pathlib import Path
 
 APP_NAME = "ScreenScan"
 APP_TITLE = "屏幕扫描助手"
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.1.1"
 
 DEFAULTS = {
     "hotkey_capture": "alt+s",        # 框选截图识别热键 (pynput 格式)
@@ -64,3 +64,4 @@ class Config:
     def set(self, key: str, value) -> None:
         self.data[key] = value
         self.save()
+

@@ -40,6 +40,12 @@ def test_onscreen(app: QApplication) -> None:
     panel.show()
     app.processEvents()
 
+    # 0) 操作条必须是独立窗口且位于面板外面（不被面板遮挡）
+    assert panel.toolbar.isVisible(), "操作条未显示"
+    assert not panel.toolbar.geometry().intersects(panel.geometry()), (
+        f"操作条压在面板上：{panel.toolbar.geometry()} vs {panel.geometry()}"
+    )
+
     # 1) 点击第 1 段 → 选中 1 段 → 复制
     QTest.mouseClick(panel, Qt.LeftButton, Qt.NoModifier, QPoint(60, 25))
     app.processEvents()
@@ -69,13 +75,34 @@ def test_onscreen(app: QApplication) -> None:
     app.processEvents()
     assert panel._selected == {0, 1}, panel._selected
 
-    # 5) Esc 关闭
+    # 5) Esc 关闭（操作条一并关闭）
     closed = {"v": False}
     panel.closed.connect(lambda: closed.update(v=True))
     QTest.keyClick(panel, Qt.Key_Escape)
     app.processEvents()
     assert closed["v"], "Esc 未关闭浮层"
+    assert not panel.toolbar.isVisible(), "操作条未随面板关闭"
     print("PASS：屏幕浮层就地选择复制")
+
+
+def test_tiny_region(app: QApplication) -> None:
+    """极小框选区域：面板自动放大到可用尺寸，操作条仍在外面且能关闭。"""
+    from src.onscreen_result import MIN_PANEL_H, MIN_PANEL_W
+
+    screen = QGuiApplication.primaryScreen()
+    panel = OnScreenResult(make_pixmap(120, 40), ITEMS, screen, QRect(100, 100, 120, 40), dpr=1.0)
+    panel.show()
+    app.processEvents()
+    assert panel.width() >= MIN_PANEL_W, f"面板过小：{panel.width()}"
+    assert panel.height() >= MIN_PANEL_H, f"面板过小：{panel.height()}"
+    assert not panel.toolbar.geometry().intersects(panel.geometry()), "小区域时操作条压住面板"
+
+    closed = {"v": False}
+    panel.closed.connect(lambda: closed.update(v=True))
+    QTest.mouseClick(panel.toolbar.btn_close, Qt.LeftButton)
+    app.processEvents()
+    assert closed["v"], "点「关闭」未关闭浮层"
+    print("PASS：极小区域可用性（放大 + 操作条在外 + 可关闭）")
 
 
 def test_result_multiselect(app: QApplication, tmp: Path) -> None:
@@ -110,6 +137,7 @@ def main() -> int:
     apply_theme(app)
     tmp = Path(tempfile.mkdtemp(prefix="screenscan_sel_"))
     test_onscreen(app)
+    test_tiny_region(app)
     test_result_multiselect(app, tmp)
     print("PASS：新交互测试全部通过")
     return 0

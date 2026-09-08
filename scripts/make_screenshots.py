@@ -10,7 +10,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("QT_QPA_FONTDIR", r"C:\Windows\Fonts")
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from PySide6.QtGui import QPixmap
+from PySide6.QtCore import QRect
+from PySide6.QtGui import QColor, QGuiApplication, QPainter, QPixmap
 from PySide6.QtWidgets import QApplication
 
 from src.config import Config
@@ -70,7 +71,20 @@ def main() -> int:
     panel._hover = 1
     panel._update_status()
     app.processEvents()
-    panel.grab().save(str(OUT / "onscreen.png"), "PNG")
+    # 操作条是独立窗口，合成到一张图里便于说明
+    panel_grab = panel.grab()
+    bar_grab = panel.toolbar.grab()
+    pg, bg = panel.geometry(), panel.toolbar.geometry()
+    union = pg.united(bg)
+    canvas = QPixmap(union.width(), union.height())
+    canvas.fill(QColor(233, 240, 248))
+    from PySide6.QtGui import QPainter
+
+    painter = QPainter(canvas)
+    painter.drawPixmap(pg.x() - union.x(), pg.y() - union.y(), panel_grab)
+    painter.drawPixmap(bg.x() - union.x(), bg.y() - union.y(), bar_grab)
+    painter.end()
+    canvas.save(str(OUT / "onscreen.png"), "PNG")
     panel.close()
 
     print(f"OK: {OUT}")
