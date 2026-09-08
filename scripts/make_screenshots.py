@@ -57,6 +57,22 @@ def main() -> int:
     app.processEvents()
     result_win.grab().save(str(OUT / "result.png"), "PNG")
 
+    # —— 屏幕浮层（就地选择） ——
+    from PySide6.QtCore import QRect
+    from PySide6.QtGui import QGuiApplication
+
+    from src.onscreen_result import OnScreenResult
+
+    screen = QGuiApplication.primaryScreen()
+    panel = OnScreenResult(pm, items, screen, QRect(60, 60, 720, 300), dpr=1.0)
+    panel.show()
+    panel._selected = {0, 2}
+    panel._hover = 1
+    panel._update_status()
+    app.processEvents()
+    panel.grab().save(str(OUT / "onscreen.png"), "PNG")
+    panel.close()
+
     print(f"OK: {OUT}")
     return 0
 

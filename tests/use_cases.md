@@ -15,6 +15,9 @@
 | A6 | 控制器识别链路回归（防止"卡在正在识别"） | tests/test_controller_flow.py | ✅ PASS |
 | A7 | 真实启动路径复现（引擎预加载+托盘+控制器全链路） | 屏幕扫描助手.exe --autocap | ✅ PASS（stage=done） |
 | A8 | 卡死现场截图复测（1.35MB 区域 / 5.6MB 全屏） | 屏幕扫描助手.exe --flowtest <图片> | ✅ PASS（2.71s / 3.81s） |
+| A9 | 屏幕浮层就地选择复制（点击/Ctrl多选/Ctrl+A/拖拽/Esc） | tests/test_selection_features.py | ✅ PASS |
+| A10 | 结果窗多选复制（勾选/全选/取消/复制选中） | tests/test_selection_features.py | ✅ PASS |
+| A11 | 打包环境浮层链路 | 屏幕扫描助手.exe --autocap | ✅ PASS（日志：屏幕浮层已显示 items=21） |
 
 ## 2. 人工实测用例
 
