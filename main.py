@@ -7,13 +7,13 @@ from __future__ import annotations
 
 import os
 import sys
+from pathlib import Path
 
 # 保证在 PyInstaller 打包环境与开发环境都能 import src
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from PySide6.QtCore import QLockFile
 from PySide6.QtWidgets import QApplication, QMessageBox
-
 from src.app_controller import AppController
 from src.config import APP_NAME, APP_TITLE, Config, data_dir
 from src.history import HistoryStore
@@ -26,10 +26,61 @@ from src.tray import Tray
 from src.widgets import make_app_icon
 
 
+def run_selftest(out_path: str) -> int:
+    """打包自检：绘制测试图 → 离线 OCR → 结果写入 out_path。
+
+    用于验证 exe 中 OCR 引擎与模型是否完整打包。
+    """
+    import json
+
+    from PySide6.QtGui import QColor, QFont, QImage, QPainter
+
+    from src.config import tmp_dir
+    from src.ocr_engine import OcrEngine
+
+    img = QImage(820, 240, QImage.Format_RGB32)  # noqa: F841
+    img.fill(QColor("white"))
+    p = QPainter(img)
+    p.setPen(QColor("black"))
+    p.setFont(QFont("Microsoft YaHei", 22))
+    p.drawText(20, 46, "屏幕扫描助手 ScreenScan")
+    p.drawText(20, 100, "功能测试 12345 Hello")
+    p.drawText(20, 154, "离线识别自检")
+    p.end()
+    path = str(tmp_dir() / "selftest.png")
+    img.save(path, "PNG")
+
+    engine = OcrEngine()
+    try:
+        items = engine.recognize_sync(path)
+    except Exception as e:
+        result = {"ok": False, "error": str(e), "count": 0, "text": ""}
+    else:
+        text = " ".join(it["text"] for it in items)
+        result = {
+            "ok": ("屏幕扫描助手" in text) and ("12345" in text),
+            "count": len(items),
+            "text": text,
+        }
+    try:
+        Path(out_path).write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
+    except OSError:
+        pass
+    print(json.dumps(result, ensure_ascii=False))
+    return 0 if result.get("ok") else 1
+
+
 def main() -> int:
     QApplication.setApplicationName(APP_NAME)
     QApplication.setApplicationDisplayName(APP_TITLE)
     app = QApplication(sys.argv)
+
+    # 打包自检模式：--selftest <输出json路径>
+    if "--selftest" in sys.argv:
+        idx = sys.argv.index("--selftest")
+        out_path = sys.argv[idx + 1] if len(sys.argv) > idx + 1 else "selftest.json"
+        return run_selftest(out_path)
+
     app.setQuitOnLastWindowClosed(False)
     apply_theme(app)
     icon = make_app_icon()

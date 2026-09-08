@@ -4,7 +4,7 @@ from __future__ import annotations
 import time
 
 from PySide6.QtCore import QRect, Qt
-from PySide6.QtGui import QGuiApplication, QPixmap
+from PySide6.QtGui import QGuiApplication, QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -79,6 +79,12 @@ class ResultWindow(QWidget):
         self.label_status = QLabel("")
         self.label_status.setStyleSheet("color: #5C7A99;")
         root.addWidget(self.label_status)
+
+        # Ctrl+C / Ctrl+Shift+C：一键复制全部文字（列表未聚焦时也生效）
+        self._shortcut_copy = QShortcut(QKeySequence("Ctrl+C"), self)
+        self._shortcut_copy.activated.connect(self.copy_all_text)
+        self._shortcut_copy2 = QShortcut(QKeySequence("Ctrl+Shift+C"), self)
+        self._shortcut_copy2.activated.connect(self.copy_all_text)
 
     # ---------- 展示结果 ----------
     def show_result(self, pixmap: QPixmap, items: list[dict], mode: str,

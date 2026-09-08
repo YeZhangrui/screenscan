@@ -119,6 +119,7 @@ class AppController(QObject):
             self.tray.showMessage(APP_TITLE, "图片保存失败，无法识别", self.tray.Information, 2500)
             return
         self.main_win.set_busy(f"正在识别（{mode}），请稍候…")
+        self.tray.showMessage(APP_TITLE, f"正在识别（{mode}），请稍候…", self.tray.Information, 1500)
         self.ocr.recognize_async(job, str(output))
 
     def on_ocr_done(self, job: str, items: list[dict]) -> None:
