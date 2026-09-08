@@ -28,6 +28,9 @@ from PySide6.QtWidgets import (
 
 MIN_PANEL_W = 380   # 面板最小显示宽度（过小区域会自动放大，便于点选）
 MIN_PANEL_H = 170
+MIN_RESIZE_W = 200  # 手动拖拽缩放的尺寸下限
+MIN_RESIZE_H = 120
+RESIZE_MARGIN = 8   # 边缘拖拽感应宽度
 BAR_MARGIN = 8      # 操作条与面板的间距
 RADIUS = 10         # 圆角半径（面板与操作条保持一致）
 
@@ -103,6 +106,9 @@ class OnScreenResult(QWidget):
         self._hover: int | None = None
         self._band: QRect | None = None
         self._band_start: QPoint | None = None
+        self._resize_edge: int = 0            # 1左 2右 4上 8下
+        self._resize_start_geo: QRect | None = None
+        self._resize_start_pos: QPoint | None = None
 
         self.setWindowFlags(
             Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
@@ -164,6 +170,89 @@ class OnScreenResult(QWidget):
         self.toolbar.setGeometry(QRect(x, y, tw, th))
         self.toolbar.raise_()
 
+    # ---------- 缩放（拖拽边缘/四角） ----------
+    def _edge_at(self, pos: QPoint) -> int:
+        """返回鼠标所在的边缘标记：1左 2右 4上 8下（0 表示不在边缘）。"""
+        m = RESIZE_MARGIN
+        flags = 0
+        if pos.x() <= m:
+            flags |= 1
+        elif pos.x() >= self.width() - m:
+            flags |= 2
+        if pos.y() <= m:
+            flags |= 4
+        elif pos.y() >= self.height() - m:
+            flags |= 8
+        return flags
+
+    @staticmethod
+    def _cursor_for(flags: int):
+        if flags in (1 | 4, 2 | 8):
+            return Qt.SizeFDiagCursor
+        if flags in (2 | 4, 1 | 8):
+            return Qt.SizeBDiagCursor
+        if flags & (1 | 2):
+            return Qt.SizeHorCursor
+        if flags & (4 | 8):
+            return Qt.SizeVerCursor
+        return Qt.ArrowCursor
+
+    def _do_resize(self, global_pos: QPoint) -> None:
+        """等比缩放：保持图片宽高比，避免文字与识别框变形。"""
+        if self._resize_start_geo is None or self._resize_start_pos is None:
+            return
+        start = self._resize_start_geo
+        dx = global_pos.x() - self._resize_start_pos.x()
+        dy = global_pos.y() - self._resize_start_pos.y()
+        pw, ph = self._pixmap.width(), self._pixmap.height()
+        if pw <= 0 or ph <= 0:
+            return
+        aspect = pw / ph
+        scr = self._screen.geometry() if self._screen is not None else self.geometry()
+
+        edge = self._resize_edge
+        if edge & 2:          # 右边缘：锚定左上
+            w = start.width() + dx
+            anchor = ("tl", start.x(), start.y())
+        elif edge & 1:        # 左边缘：锚定右上
+            w = start.width() - dx
+            anchor = ("tr", start.x() + start.width() - 1, start.y())
+        elif edge & 8:        # 下边缘：锚定左上
+            h = start.height() + dy
+            w = h * aspect
+            anchor = ("tl", start.x(), start.y())
+        elif edge & 4:        # 上边缘：锚定左下
+            h = start.height() - dy
+            w = h * aspect
+            anchor = ("bl", start.x(), start.y() + start.height() - 1)
+        else:
+            return
+
+        # 尺寸下限
+        w = max(w, float(MIN_RESIZE_W))
+        h = w / aspect
+        if h < MIN_RESIZE_H:
+            h = float(MIN_RESIZE_H)
+            w = h * aspect
+        # 不超过屏幕
+        w = min(w, float(scr.width()))
+        h = min(h, float(scr.height()))
+        if w / aspect > h:
+            w = h * aspect
+        else:
+            h = w / aspect
+
+        mode, ax, ay = anchor
+        if mode == "tl":
+            x, y = ax, ay
+        elif mode == "tr":
+            x, y = ax - int(round(w)) + 1, ay
+        else:  # bl
+            x, y = ax, ay - int(round(h)) + 1
+        x = max(scr.x(), min(x, scr.x() + scr.width() - int(round(w))))
+        y = max(scr.y(), min(y, scr.y() + scr.height() - int(round(h))))
+        self.setGeometry(QRect(x, y, int(round(w)), int(round(h))))
+
     # ---------- 绘制 ----------
     def paintEvent(self, ev):
         p = QPainter(self)
@@ -207,6 +296,12 @@ class OnScreenResult(QWidget):
         p.drawRoundedRect(
             QRectF(self.rect()).adjusted(1.0, 1.0, -1.0, -1.0), RADIUS, RADIUS
         )
+        # 右下角缩放提示（三条斜线）
+        p.setPen(QPen(QColor(47, 128, 214, 210), 2))
+        w, h = self.width(), self.height()
+        for i in range(3):
+            off = 4 + i * 5
+            p.drawLine(w - off, h - 4, w - 4, h - off)
         p.end()
 
     # ---------- 坐标映射 ----------
@@ -240,6 +335,13 @@ class OnScreenResult(QWidget):
         if ev.button() != Qt.LeftButton:
             return
         pos = ev.position().toPoint()
+        # 优先判定缩放边缘
+        edge = self._edge_at(pos)
+        if edge:
+            self._resize_edge = edge
+            self._resize_start_geo = self.geometry()
+            self._resize_start_pos = ev.globalPosition().toPoint()
+            return
         hit = self._hit(pos)
         if hit is not None:
             if ev.modifiers() & Qt.ControlModifier:
@@ -260,17 +362,30 @@ class OnScreenResult(QWidget):
 
     def mouseMoveEvent(self, ev):
         pos = ev.position().toPoint()
+        if self._resize_edge:
+            self._do_resize(ev.globalPosition().toPoint())
+            return
         if self._band_start is not None:
             self._band = QRect(self._band_start, pos).normalized()
             self.update()
             return
+        # 边缘光标反馈
+        self.setCursor(self._cursor_for(self._edge_at(pos)))
         hover = self._hit(pos)
         if hover != self._hover:
             self._hover = hover
             self.update()
 
     def mouseReleaseEvent(self, ev):
-        if ev.button() != Qt.LeftButton or self._band_start is None:
+        if ev.button() != Qt.LeftButton:
+            return
+        if self._resize_edge:
+            self._resize_edge = 0
+            self._resize_start_geo = None
+            self._resize_start_pos = None
+            self.setCursor(Qt.ArrowCursor)
+            return
+        if self._band_start is None:
             return
         band = QRect(self._band_start, ev.position().toPoint()).normalized()
         self._band_start = None
@@ -306,7 +421,9 @@ class OnScreenResult(QWidget):
     # ---------- 操作 ----------
     def _update_status(self) -> None:
         n = len(self._selected)
-        self.toolbar.label_hint.setText(f"已选 {n} 段文字" if n else "点击或拖拽框选文字")
+        self.toolbar.label_hint.setText(
+            f"已选 {n} 段文字" if n else "点击或拖拽框选文字 · 拖拽边缘可缩放"
+        )
         self.toolbar.btn_copy_sel.setText(f"复制选中（{n}）" if n else "复制选中")
         self._layout_toolbar()
 

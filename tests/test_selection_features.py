@@ -79,9 +79,9 @@ def test_onscreen(app: QApplication) -> None:
     panel.copy_selected()
     assert QGuiApplication.clipboard().text().count("\n") == 2
 
-    # 4) 拖拽框选：清空后从空白拖过前两段
+    # 4) 拖拽框选：从面板内部（避开边缘缩放区）拖过前两段
     panel._selected.clear()
-    QTest.mousePress(panel, Qt.LeftButton, Qt.NoModifier, QPoint(200, 5))
+    QTest.mousePress(panel, Qt.LeftButton, Qt.NoModifier, QPoint(300, 30))
     QTest.mouseMove(panel, QPoint(5, 100))
     QTest.mouseRelease(panel, Qt.LeftButton, Qt.NoModifier, QPoint(5, 100))
     app.processEvents()
@@ -132,6 +132,43 @@ def test_tiny_region(app: QApplication) -> None:
     print("PASS：极小区域可用性（等比放大 + 操作条在外 + 坐标对齐 + 可关闭）")
 
 
+def test_resize(app: QApplication) -> None:
+    """拖拽面板边缘可缩放：等比、有下限、操作条自动跟随且不重叠。"""
+    from src.onscreen_result import MIN_RESIZE_H, MIN_RESIZE_W
+
+    screen = QGuiApplication.primaryScreen()
+    pm = make_pixmap(600, 200)
+    panel = OnScreenResult(pm, ITEMS, screen, QRect(120, 120, 600, 200), dpr=1.0)
+    panel.show()
+    app.processEvents()
+    w0, h0 = panel.width(), panel.height()
+    aspect = pm.width() / pm.height()
+
+    # 1) 拖右边缘放大
+    QTest.mousePress(panel, Qt.LeftButton, Qt.NoModifier, QPoint(w0 - 2, h0 // 2))
+    QTest.mouseMove(panel, QPoint(w0 - 2 + 150, h0 // 2))
+    QTest.mouseRelease(panel, Qt.LeftButton, Qt.NoModifier, QPoint(w0 - 2 + 150, h0 // 2))
+    app.processEvents()
+    assert panel.width() > w0 + 100, f"右边缘拖拽未放大：{panel.width()} (原 {w0})"
+    assert abs(panel.width() / panel.height() - aspect) < 0.05, "缩放后宽高比被破坏"
+    assert not panel.toolbar.geometry().intersects(panel.geometry()), "缩放后操作条压住面板"
+
+    # 2) 拖右下角缩小到极限 → 不低于下限
+    w1, h1 = panel.width(), panel.height()
+    QTest.mousePress(panel, Qt.LeftButton, Qt.NoModifier, QPoint(w1 - 2, h1 - 2))
+    QTest.mouseMove(panel, QPoint(panel.x() + 5, panel.y() + 5))
+    QTest.mouseRelease(panel, Qt.LeftButton, Qt.NoModifier, QPoint(panel.x() + 5, panel.y() + 5))
+    app.processEvents()
+    assert panel.width() >= MIN_RESIZE_W, f"缩得比下限还小：{panel.width()}"
+    assert panel.height() >= MIN_RESIZE_H - 1, f"缩得比下限还小：{panel.height()}"
+
+    # 3) 缩放后坐标映射仍然一致（框与文字对齐）
+    dr = panel._draw_rect
+    assert panel._to_panel((0, 0)) == dr.topLeft()
+    panel.close()
+    print("PASS：浮层拖拽缩放（等比 + 下限 + 操作条跟随 + 映射一致）")
+
+
 def test_result_multiselect(app: QApplication, tmp: Path) -> None:
     config = Config(path=tmp / "config.json")
     win = ResultWindow(config)
@@ -165,6 +202,7 @@ def main() -> int:
     tmp = Path(tempfile.mkdtemp(prefix="screenscan_sel_"))
     test_onscreen(app)
     test_tiny_region(app)
+    test_resize(app)
     test_result_multiselect(app, tmp)
     print("PASS：新交互测试全部通过")
     return 0
