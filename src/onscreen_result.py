@@ -73,13 +73,20 @@ class OnScreenToolbar(QWidget):
         self.btn_copy_all.clicked.connect(owner.copy_all)
         self.btn_copy_img = QPushButton("复制图片")
         self.btn_copy_img.clicked.connect(owner.copy_image)
+        self.btn_extract = QPushButton("提取图片")
+        self.btn_extract.setCheckable(True)
+        self.btn_extract.toggled.connect(owner.set_extract_mode)
+        self.btn_save_crop = QPushButton("保存提取图")
+        self.btn_save_crop.clicked.connect(owner.save_crop)
+        self.btn_save_crop.setVisible(False)
         self.btn_detail = QPushButton("详细结果")
         self.btn_detail.clicked.connect(owner.open_detail.emit)
         self.btn_close = QPushButton("关闭")
         self.btn_close.clicked.connect(owner.close)
         self._text_buttons = (self.btn_copy_sel, self.btn_copy_all, self.btn_detail)
         for b in (self.btn_copy_sel, self.btn_copy_all, self.btn_copy_img,
-                  self.btn_detail, self.btn_close):
+                  self.btn_extract, self.btn_save_crop, self.btn_detail,
+                  self.btn_close):
             b.setCursor(Qt.PointingHandCursor)
             b.setFocusPolicy(Qt.NoFocus)   # 焦点留在面板上，Esc 始终有效
             b.setStyleSheet(
@@ -113,6 +120,11 @@ class OnScreenResult(QWidget):
         self._resize_edge: int = 0            # 1左 2右 4上 8下
         self._resize_start_geo: QRect | None = None
         self._resize_start_pos: QPoint | None = None
+        self._extract_mode = False            # 提取图片模式（拖拽裁剪）
+        self._crop_start: QPoint | None = None
+        self._crop_band: QRect | None = None
+        self._crop: QPixmap | None = None     # 最近一次提取的图片
+        self._crop_rect: QRect | None = None  # 提取框（面板坐标，用于反馈）
 
         self.setWindowFlags(
             Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
@@ -162,6 +174,8 @@ class OnScreenResult(QWidget):
         self._selected.clear()
         self._hover = None
         self._anchor = None
+        if self._extract_mode:
+            self.toolbar.btn_extract.setChecked(False)
         self._update_status()
         self.update()
 
@@ -318,6 +332,16 @@ class OnScreenResult(QWidget):
             p.setBrush(QColor(74, 144, 226, 40))
             p.drawRect(self._band)
 
+        # 提取图片：裁剪框（琥珀色，与文字选择区分）
+        if self._crop_band is not None:
+            p.setPen(QPen(QColor(240, 173, 78, 255), 2, Qt.DashLine))
+            p.setBrush(QColor(240, 173, 78, 45))
+            p.drawRect(self._crop_band)
+        elif self._crop_rect is not None:
+            p.setPen(QPen(QColor(240, 173, 78, 220), 2))
+            p.setBrush(Qt.NoBrush)
+            p.drawRect(self._crop_rect)
+
         # 处理中 / 失败提示：面板顶部居中的小药丸
         if self._processing or self._error:
             text = "正在识别…" if self._processing else self._error
@@ -384,6 +408,12 @@ class OnScreenResult(QWidget):
             self._resize_start_geo = self.geometry()
             self._resize_start_pos = ev.globalPosition().toPoint()
             return
+        # 提取图片模式：拖拽裁剪
+        if self._extract_mode:
+            self._crop_start = pos
+            self._crop_band = QRect(pos, pos)
+            self.update()
+            return
         hit = self._hit(pos)
         if hit is not None:
             mods = ev.modifiers()
@@ -414,6 +444,10 @@ class OnScreenResult(QWidget):
         if self._resize_edge:
             self._do_resize(ev.globalPosition().toPoint())
             return
+        if self._crop_start is not None:
+            self._crop_band = QRect(self._crop_start, pos).normalized()
+            self.update()
+            return
         if self._band_start is not None:
             self._band = QRect(self._band_start, pos).normalized()
             self.update()
@@ -433,6 +467,15 @@ class OnScreenResult(QWidget):
             self._resize_start_geo = None
             self._resize_start_pos = None
             self.setCursor(Qt.ArrowCursor)
+            return
+        if self._crop_start is not None:
+            band = QRect(self._crop_start, ev.position().toPoint()).normalized()
+            self._crop_start = None
+            self._crop_band = None
+            if band.width() >= 4 and band.height() >= 4:
+                self._finish_crop(band)
+            else:
+                self.update()
             return
         if self._band_start is None:
             return
@@ -455,6 +498,9 @@ class OnScreenResult(QWidget):
     # ---------- 键盘 ----------
     def keyPressEvent(self, ev):
         if ev.key() == Qt.Key_Escape:
+            if self._extract_mode:
+                self.toolbar.btn_extract.setChecked(False)   # 先退出提取模式
+                return
             self.close()
             return
         if ev.key() == Qt.Key_A and (ev.modifiers() & Qt.ControlModifier):
@@ -479,10 +525,13 @@ class OnScreenResult(QWidget):
                 b.setEnabled(False)
         else:
             n = len(self._selected)
-            self.toolbar.label_hint.setText(
-                f"已选 {n} 段文字（再点一次可取消）" if n
-                else "点击文字多选 · 拖拽框选 · 拖拽边缘缩放"
-            )
+            if self._extract_mode:
+                self.toolbar.label_hint.setText("拖拽框选要提取的图片区域（Esc 取消）")
+            else:
+                self.toolbar.label_hint.setText(
+                    f"已选 {n} 段文字（再点一次可取消）" if n
+                    else "点击文字多选 · 拖拽框选 · 拖拽边缘缩放"
+                )
             self.toolbar.btn_copy_sel.setText(f"复制选中（{n}）" if n else "复制选中")
             for b in self.toolbar._text_buttons:
                 b.setEnabled(True)
@@ -517,6 +566,75 @@ class OnScreenResult(QWidget):
     def copy_image(self) -> None:
         QGuiApplication.clipboard().setImage(self._pixmap.toImage())
         self.toolbar.label_hint.setText("已复制图片 ✓")
+        self._layout_toolbar()
+
+    # ---------- 提取图中图片 ----------
+    def set_extract_mode(self, on: bool) -> None:
+        """开启/关闭「提取图片」模式：开启后拖拽即裁剪。"""
+        self._extract_mode = bool(on)
+        if self._extract_mode:
+            self._selected.clear()
+            self._hover = None
+            self._crop_band = None
+            self._crop_start = None
+            self.setCursor(Qt.CrossCursor)
+        else:
+            self.setCursor(Qt.ArrowCursor)
+        self.toolbar.label_hint.setText(
+            "拖拽框选要提取的图片区域（Esc 取消）" if self._extract_mode else ""
+        )
+        self._update_status()
+        self.update()
+
+    def _to_pixmap(self, panel_rect: QRect) -> QRect:
+        """面板坐标 → 原图像素坐标。"""
+        dr = self._draw_rect
+        if dr.width() <= 0 or self._scale <= 0:
+            return QRect()
+        x = (panel_rect.x() - dr.x()) / self._scale
+        y = (panel_rect.y() - dr.y()) / self._scale
+        w = panel_rect.width() / self._scale
+        h = panel_rect.height() / self._scale
+        pw, ph = self._pixmap.width(), self._pixmap.height()
+        x = max(0.0, min(x, pw - 1.0))
+        y = max(0.0, min(y, ph - 1.0))
+        w = max(1.0, min(w, pw - x))
+        h = max(1.0, min(h, ph - y))
+        return QRect(int(round(x)), int(round(y)), int(round(w)), int(round(h)))
+
+    def _finish_crop(self, band: QRect) -> None:
+        src = self._to_pixmap(band)
+        if src.width() < 4 or src.height() < 4:
+            return
+        crop = self._pixmap.copy(src)
+        self._crop = crop
+        self._crop_rect = band
+        QGuiApplication.clipboard().setImage(crop.toImage())
+        self.toolbar.btn_save_crop.setVisible(True)
+        self.toolbar.btn_extract.setChecked(False)   # 提取一次后退出该模式
+        self.toolbar.label_hint.setText(
+            f"已提取并复制图片（{crop.width()}×{crop.height()}）✓ 可点「保存提取图」存为文件"
+        )
+        self._layout_toolbar()
+        self.update()
+
+    def save_crop(self) -> None:
+        if self._crop is None:
+            return
+        import time
+
+        from PySide6.QtWidgets import QFileDialog, QMessageBox
+
+        from .config import APP_TITLE
+
+        default = f"提取图片_{time.strftime('%Y%m%d_%H%M%S')}.png"
+        path, _ = QFileDialog.getSaveFileName(self, "保存提取的图片", default, "PNG 图片 (*.png)")
+        if not path:
+            return
+        if self._crop.save(path, "PNG"):
+            self.toolbar.label_hint.setText(f"已保存：{path}")
+        else:
+            QMessageBox.warning(self, APP_TITLE, "保存失败，请更换路径")
         self._layout_toolbar()
 
     def resizeEvent(self, ev):

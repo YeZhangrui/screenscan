@@ -231,6 +231,50 @@ def test_processing_then_result(app: QApplication) -> None:
     print("PASS：占位面板 → 原地升级 / 失败提示")
 
 
+def test_extract_on_onscreen(app: QApplication) -> None:
+    """快捷键浮层里的「提取图片」：拖拽裁剪 → 复制到剪贴板 → 可保存。"""
+    screen = QGuiApplication.primaryScreen()
+    pm = make_pixmap(600, 200)
+    panel = OnScreenResult(pm, ITEMS, screen, QRect(100, 100, 600, 200), dpr=1.0)
+    panel.show()
+    app.processEvents()
+    assert not panel.toolbar.btn_save_crop.isVisible(), "初始不应显示保存提取图按钮"
+
+    # 开启提取模式：清空文字选择，进入十字光标
+    panel.toolbar.btn_extract.setChecked(True)
+    app.processEvents()
+    assert panel._extract_mode
+    assert panel._selected == set()
+
+    # 拖拽裁剪 140×90（scale=1）
+    QTest.mousePress(panel, Qt.LeftButton, Qt.NoModifier, QPoint(60, 30))
+    QTest.mouseMove(panel, QPoint(200, 120))
+    QTest.mouseRelease(panel, Qt.LeftButton, Qt.NoModifier, QPoint(200, 120))
+    app.processEvents()
+    assert panel._crop is not None, "未生成提取图片"
+    assert panel.toolbar.btn_save_crop.isVisible(), "「保存提取图」按钮未出现"
+    img = QGuiApplication.clipboard().image()
+    assert not img.isNull(), "提取的图片未进入剪贴板"
+    assert abs(img.width() - 140) <= 2 and abs(img.height() - 90) <= 2, (
+        f"提取尺寸不符：{img.width()}×{img.height()}（期望约 140×90）"
+    )
+    assert not panel._extract_mode, "提取完成后应自动退出提取模式"
+
+    # 提取模式下 Esc 先退出模式（不关闭面板）
+    panel.toolbar.btn_extract.setChecked(True)
+    app.processEvents()
+    QTest.keyClick(panel, Qt.Key_Escape)
+    app.processEvents()
+    assert not panel._extract_mode and panel.isVisible(), "Esc 应只退出提取模式"
+
+    # 退出提取模式后文字选择仍正常
+    QTest.mouseClick(panel, Qt.LeftButton, Qt.NoModifier, QPoint(60, 25))
+    app.processEvents()
+    assert panel._selected == {0}
+    panel.close()
+    print("PASS：浮层「提取图片」拖拽裁剪 + 复制 + 可保存")
+
+
 def test_result_multiselect(app: QApplication, tmp: Path) -> None:
     config = Config(path=tmp / "config.json")
     win = ResultWindow(config)
@@ -281,6 +325,7 @@ def main() -> int:
     test_tiny_region(app)
     test_resize(app)
     test_processing_then_result(app)
+    test_extract_on_onscreen(app)
     test_result_multiselect(app, tmp)
     print("PASS：新交互测试全部通过")
     return 0
