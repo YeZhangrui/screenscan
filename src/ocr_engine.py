@@ -1,9 +1,13 @@
 """离线 OCR 引擎封装（RapidOCR / onnxruntime）。"""
 from __future__ import annotations
 
+import logging
 import threading
+import time
 
 from PySide6.QtCore import QObject, Signal
+
+log = logging.getLogger("ocr")
 
 
 class OcrSignals(QObject):
@@ -35,6 +39,8 @@ class OcrEngine(QObject):
         with self._load_lock:
             if self._engine is not None:
                 return
+            t0 = time.perf_counter()
+            log.info("开始加载 OCR 引擎（线程 %s）", threading.current_thread().name)
             self.signals.state_changed.emit(True, "正在加载识别引擎…")
             try:
                 # 新版 RapidOCR（PP-OCRv6，更快更准；截图文字均为正立，关闭方向分类提速）
@@ -44,16 +50,20 @@ class OcrEngine(QObject):
                     params={"Global.use_cls": False, "Global.log_level": "error"}
                 )
                 self._api = "v6"
+                log.info("OCR 引擎就绪 api=v6 耗时 %.2fs", time.perf_counter() - t0)
             except Exception as e:
+                log.exception("v6 引擎加载失败，尝试降级 v3: %s", e)
                 # 兜底：老版 rapidocr_onnxruntime（PP-OCRv3）
                 try:
                     from rapidocr_onnxruntime import RapidOCR
 
                     self._engine = RapidOCR(use_angle_cls=False, det_model_path="")
                     self._api = "v3"
+                    log.info("OCR 引擎就绪 api=v3 耗时 %.2fs", time.perf_counter() - t0)
                 except Exception:
                     self._engine = None
                     self._load_error = f"识别引擎加载失败：{e}"
+                    log.exception("v3 引擎也加载失败")
             self.signals.state_changed.emit(False, "")
 
     def ensure_loaded(self) -> None:
@@ -71,10 +81,16 @@ class OcrEngine(QObject):
         ).start()
 
     def _run(self, job_id: str, image_path: str) -> None:
+        log.info("识别任务开始 job=%s 线程=%s", job_id, threading.current_thread().name)
+        t0 = time.perf_counter()
         try:
             items = self.recognize_sync(image_path)
+            log.info(
+                "识别任务完成 job=%s 耗时 %.2fs 结果 %d 项", job_id, time.perf_counter() - t0, len(items)
+            )
             self.signals.finished.emit(job_id, items)
         except Exception as e:
+            log.exception("识别任务失败 job=%s: %s", job_id, e)
             self.signals.failed.emit(job_id, f"识别失败：{e}")
 
     def recognize_sync(self, image_path: str, min_score: float = 0.35) -> list[dict]:

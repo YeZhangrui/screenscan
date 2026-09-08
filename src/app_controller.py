@@ -1,11 +1,12 @@
 """应用主控制：串联热键、截图、OCR、结果窗、历史、设置。"""
 from __future__ import annotations
 
+import logging
 import uuid
 
 from PySide6.QtCore import QObject, QTimer
 from PySide6.QtGui import QCursor, QGuiApplication, QImage, QPixmap
-from PySide6.QtWidgets import QFileDialog, QMessageBox
+from PySide6.QtWidgets import QFileDialog, QMessageBox, QSystemTrayIcon
 
 from . import autostart
 from .capture import grab_fullscreen, grab_region
@@ -17,6 +18,17 @@ from .overlay import ScreenSelector
 from .result_window import ResultWindow
 from .settings_window import SettingsDialog
 from .tray import Tray
+
+log = logging.getLogger("app")
+
+
+def _notify(tray: Tray, message: str, warning: bool = False) -> None:
+    """托盘气泡通知；任何通知异常不得影响主流程。"""
+    try:
+        icon = QSystemTrayIcon.Warning if warning else QSystemTrayIcon.Information
+        tray.showMessage(APP_TITLE, message, icon, 3000)
+    except Exception as e:  # noqa: BLE001
+        log.exception("托盘通知失败（忽略）: %s", e)
 
 
 class AppController(QObject):
@@ -71,7 +83,7 @@ class AppController(QObject):
     def _grab_region_and_ocr(self, screen, rect) -> None:
         pixmap = grab_region(screen, rect)
         if pixmap is None or pixmap.isNull():
-            self.tray.showMessage(APP_TITLE, "截图失败，请重试", self.tray.Information, 2500)
+            _notify(self.tray, "截图失败，请重试")
             self.main_win.show_events()
             return
         self._process(pixmap, "框选识别")
@@ -87,7 +99,7 @@ class AppController(QObject):
         screen = QGuiApplication.screenAt(QCursor.pos()) or QGuiApplication.primaryScreen()
         pixmap = grab_fullscreen(screen)
         if pixmap is None or pixmap.isNull():
-            self.tray.showMessage(APP_TITLE, "全屏截图失败，请重试", self.tray.Information, 2500)
+            _notify(self.tray, "全屏截图失败，请重试")
             self.main_win.show_events()
             return
         self._process(pixmap, "全屏扫描")
@@ -116,28 +128,36 @@ class AppController(QObject):
         plain.setDevicePixelRatio(1.0)
         if not plain.save(str(output), "PNG"):
             self._pending.pop(job, None)
-            self.tray.showMessage(APP_TITLE, "图片保存失败，无法识别", self.tray.Information, 2500)
+            _notify(self.tray, "图片保存失败，无法识别")
             return
         self.main_win.set_busy(f"正在识别（{mode}），请稍候…")
-        self.tray.showMessage(APP_TITLE, f"正在识别（{mode}），请稍候…", self.tray.Information, 1500)
+        _notify(self.tray, f"正在识别（{mode}），请稍候…")
+        log.info("发起识别 job=%s mode=%s 图片=%s", job, mode, output)
         self.ocr.recognize_async(job, str(output))
 
     def on_ocr_done(self, job: str, items: list[dict]) -> None:
+        log.info("识别完成回调 job=%s 项数=%d", job, len(items))
         payload = self._pending.pop(job, None)
         if payload is None:
+            log.warning("识别完成但无对应任务 job=%s", job)
             return
         pixmap, mode = payload
         text = "\n".join(it["text"] for it in items)
-        if text.strip():
-            self.history.add(mode, text, pixmap)
-            self.main_win.update_history()
-        self.result_win.show_result(pixmap, items, mode)
+        try:
+            if text.strip():
+                self.history.add(mode, text, pixmap)
+                self.main_win.update_history()
+            self.result_win.show_result(pixmap, items, mode)
+        except Exception:  # noqa: BLE001
+            log.exception("结果展示环节异常 job=%s", job)
         self.main_win.set_busy(f"识别完成（{mode}）：识别到 {len(items)} 段文字")
+        log.info("结果窗口已展示 job=%s", job)
 
     def on_ocr_failed(self, job: str, message: str) -> None:
+        log.warning("识别失败回调 job=%s: %s", job, message)
         self._pending.pop(job, None)
         self.main_win.set_busy("识别失败")
-        self.tray.showMessage(APP_TITLE, message, self.tray.Warning, 3500)
+        _notify(self.tray, message, warning=True)
         self.main_win.show_events()
 
     # ---------- 历史 ----------
