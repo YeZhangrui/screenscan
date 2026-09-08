@@ -24,7 +24,7 @@ class ImageArea(QLabel):
         self.setMinimumSize(200, 160)
         self.setAlignment(Qt.AlignCenter)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.setStyleSheet("background: #F6FAFE; border: 1px solid #CFE3F5; border-radius: 8px;")
+        self.setObjectName("ImageArea")   # 背景/边框由主题样式表控制
 
     # ---------- 数据 ----------
     def set_source(self, pm: QPixmap | None) -> None:

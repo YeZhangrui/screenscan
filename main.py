@@ -289,7 +289,6 @@ def main() -> int:
         return run_autocap(out_path)
 
     app.setQuitOnLastWindowClosed(False)
-    apply_theme(app)
     icon = make_app_icon()
     app.setWindowIcon(icon)
 
@@ -300,6 +299,17 @@ def main() -> int:
         return 0
 
     config = Config()
+    apply_theme(app, str(config.get("theme", "system")))
+
+    # 跟随系统：系统深浅色变化时自动切换
+    def _on_color_scheme_changed(*_args) -> None:
+        apply_theme(app, str(config.get("theme", "system")))
+
+    try:
+        app.styleHints().colorSchemeChanged.connect(_on_color_scheme_changed)
+    except Exception:  # noqa: BLE001
+        pass
+
     history = HistoryStore(limit=int(config.get("history_limit", 50)))
     ocr = OcrEngine()
     hotkey_signals = HotkeySignals()

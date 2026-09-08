@@ -100,7 +100,7 @@ class ResultWindow(QWidget):
         root.addLayout(center, 1)
 
         self.label_status = QLabel("")
-        self.label_status.setStyleSheet("color: #5C7A99;")
+        self.label_status.setObjectName("StatusLabel")
         root.addWidget(self.label_status)
 
         # Ctrl+C / Ctrl+Shift+C：一键复制全部文字

@@ -257,9 +257,16 @@ class AppController(QObject):
     def open_settings(self) -> None:
         dlg = SettingsDialog(self.config, self._apply_hotkeys, self.main_win)
         if dlg.exec():
+            # 主题模式可能已变更：立即重新应用
+            from PySide6.QtWidgets import QApplication
+
+            from .theme import apply_theme
+
+            apply_theme(QApplication.instance(), str(self.config.get("theme", "system")))
             self.main_win.refresh_hints()
             self.tray.update_hint(str(self.config.get("hotkey_capture", "alt+s")))
             self.result_win.ensure_pin()
+            log.info("设置已保存：主题=%s", self.config.get("theme"))
 
     def _apply_hotkeys(self, capture: str, fullscreen: str) -> str | None:
         if self.hotkey_manager is None:

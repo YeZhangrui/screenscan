@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QButtonGroup,
     QCheckBox,
     QComboBox,
     QDialog,
@@ -11,12 +12,14 @@ from PySide6.QtWidgets import (
     QLabel,
     QMessageBox,
     QPushButton,
+    QRadioButton,
     QVBoxLayout,
 )
 
 from . import autostart
 from .config import APP_TITLE, Config
 from .hotkeys import is_valid_hotkey
+from .theme import MODE_DARK, MODE_LABELS, MODE_LIGHT, MODE_SYSTEM
 
 PRESETS = ["alt+s", "alt+shift+s", "ctrl+alt+s", "ctrl+s", "f9", "f10", "alt+f9"]
 
@@ -63,6 +66,22 @@ class SettingsDialog(QDialog):
 
         form.addRow("", self.chk_pin)
         form.addRow("", self.chk_auto)
+
+        # 主题模式
+        theme_row = QHBoxLayout()
+        theme_row.setSpacing(14)
+        self.theme_group = QButtonGroup(self)
+        self.theme_buttons = {}
+        current_theme = str(self._config.get("theme", MODE_SYSTEM)).lower()
+        for mode in (MODE_SYSTEM, MODE_LIGHT, MODE_DARK):
+            btn = QRadioButton(MODE_LABELS[mode])
+            btn.setChecked(current_theme == mode)
+            self.theme_group.addButton(btn)
+            self.theme_buttons[mode] = btn
+            theme_row.addWidget(btn)
+        theme_row.addStretch(1)
+        form.addRow("主题模式：", theme_row)
+
         root.addLayout(form)
 
         self.label_hint = QLabel(
@@ -73,7 +92,7 @@ class SettingsDialog(QDialog):
         root.addWidget(self.label_hint)
 
         self.label_error = QLabel("")
-        self.label_error.setStyleSheet("color: #C0504D;")
+        self.label_error.setObjectName("ErrorLabel")
         root.addWidget(self.label_error)
 
         btn_row = QHBoxLayout()
@@ -86,6 +105,13 @@ class SettingsDialog(QDialog):
         btn_row.addWidget(btn_cancel)
         btn_row.addWidget(btn_save)
         root.addLayout(btn_row)
+
+    def selected_theme(self) -> str:
+        """当前选中的主题模式。"""
+        for mode, btn in self.theme_buttons.items():
+            if btn.isChecked():
+                return mode
+        return MODE_SYSTEM
 
     def _on_save(self) -> None:
         capture = self.combo_capture.currentText().strip()
@@ -104,6 +130,7 @@ class SettingsDialog(QDialog):
         self._config.set("hotkey_capture", capture)
         self._config.set("hotkey_fullscreen", full)
         self._config.set("pin_result", self.chk_pin.isChecked())
+        self._config.set("theme", self.selected_theme())
         if not autostart.set_enabled(self.chk_auto.isChecked()):
             QMessageBox.warning(self, APP_TITLE, "开机自启设置写入失败（可能被系统限制）")
         self.accept()

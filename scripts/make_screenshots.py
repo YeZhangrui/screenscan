@@ -18,7 +18,7 @@ from src.config import Config
 from src.history import HistoryStore
 from src.main_window import MainWindow
 from src.result_window import ResultWindow
-from src.theme import apply_theme
+from src.theme import MODE_DARK, MODE_LIGHT, apply_theme
 
 OUT = Path(__file__).parent.parent / "docs" / "screenshots"
 
@@ -26,20 +26,11 @@ OUT = Path(__file__).parent.parent / "docs" / "screenshots"
 def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
     app = QApplication(sys.argv)
-    apply_theme(app)
 
     tmp = Path(tempfile.mkdtemp(prefix="screenscan_shot_"))
     config = Config(path=tmp / "config.json")
     history = HistoryStore(root=tmp / "history")
 
-    # —— 主窗口 ——
-    main_win = MainWindow(config, history)
-    main_win.resize(780, 580)
-    main_win.show()
-    app.processEvents()
-    main_win.grab().save(str(OUT / "main.png"), "PNG")
-
-    # —— 结果窗口 ——
     pm = QPixmap(720, 300)
     pm.fill("white")
     items = [
@@ -52,15 +43,30 @@ def main() -> int:
         {"box": [[16, 182], [260, 182], [260, 224], [16, 224]],
          "text": "Alt+S 框选截图识别", "score": 0.96},
     ]
-    result_win = ResultWindow(config)
-    result_win.resize(900, 580)
-    result_win.show_result(pm, items, "框选识别")
-    app.processEvents()
-    result_win.grab().save(str(OUT / "result.png"), "PNG")
 
-    # —— 屏幕浮层（就地选择） ——
+    for mode, suffix in ((MODE_LIGHT, ""), (MODE_DARK, "_dark")):
+        apply_theme(app, mode)
+
+        # —— 主窗口 ——
+        main_win = MainWindow(config, history)
+        main_win.resize(780, 580)
+        main_win.show()
+        app.processEvents()
+        main_win.grab().save(str(OUT / f"main{suffix}.png"), "PNG")
+        main_win.close()
+
+        # —— 结果窗口 ——
+        result_win = ResultWindow(config)
+        result_win.resize(900, 580)
+        result_win.show_result(pm, items, "框选识别")
+        app.processEvents()
+        result_win.grab().save(str(OUT / f"result{suffix}.png"), "PNG")
+        result_win.close()
+
+    # —— 屏幕浮层（就地选择，深色样式不随主题变化） ——
+    apply_theme(app, MODE_LIGHT)
     from PySide6.QtCore import QRect
-    from PySide6.QtGui import QGuiApplication
+    from PySide6.QtGui import QColor, QGuiApplication, QPainter
 
     from src.onscreen_result import OnScreenResult
 
@@ -78,8 +84,6 @@ def main() -> int:
     union = pg.united(bg)
     canvas = QPixmap(union.width(), union.height())
     canvas.fill(QColor(233, 240, 248))
-    from PySide6.QtGui import QPainter
-
     painter = QPainter(canvas)
     painter.drawPixmap(pg.x() - union.x(), pg.y() - union.y(), panel_grab)
     painter.drawPixmap(bg.x() - union.x(), bg.y() - union.y(), bar_grab)

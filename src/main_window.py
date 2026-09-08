@@ -88,7 +88,7 @@ class MainWindow(QMainWindow):
 
         # 状态栏
         self.label_status = QLabel("就绪")
-        self.label_status.setStyleSheet("color: #5C7A99;")
+        self.label_status.setObjectName("StatusLabel")
         root.addWidget(self.label_status)
 
     def _build_guide_tab(self) -> QWidget:

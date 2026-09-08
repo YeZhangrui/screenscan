@@ -7,7 +7,7 @@ from pathlib import Path
 
 APP_NAME = "ScreenScan"
 APP_TITLE = "屏幕扫描助手"
-APP_VERSION = "1.3.1"
+APP_VERSION = "1.4.0"
 
 DEFAULTS = {
     "hotkey_capture": "alt+s",        # 框选截图识别热键 (pynput 格式)
@@ -15,6 +15,7 @@ DEFAULTS = {
     "pin_result": True,               # 结果窗默认置顶
     "autostart": False,               # 开机自启
     "history_limit": 50,              # 历史记录条数上限
+    "theme": "system",                # 主题：system / light / dark
 }
 
 
@@ -64,6 +65,7 @@ class Config:
     def set(self, key: str, value) -> None:
         self.data[key] = value
         self.save()
+
 
 
 
