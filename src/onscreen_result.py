@@ -120,15 +120,24 @@ class OnScreenResult(QWidget):
         h = min(geo.height(), scr_geo.height())
         x = max(scr_geo.x(), min(geo.x(), scr_geo.x() + scr_geo.width() - w))
         y = max(scr_geo.y(), min(geo.y(), scr_geo.y() + scr_geo.height() - h))
-        # 区域过小时放大到最小可用尺寸（便于点选；位置仍贴近原处）
-        w = min(max(w, MIN_PANEL_W), scr_geo.width())
-        h = min(max(h, MIN_PANEL_H), scr_geo.height())
+        # 区域过小时放大到最小可用尺寸，但**保持原始宽高比**（否则文字与识别框会错位）
+        if w < MIN_PANEL_W or h < MIN_PANEL_H:
+            k = max(MIN_PANEL_W / w, MIN_PANEL_H / h)
+            k = min(k, scr_geo.width() / w, scr_geo.height() / h)
+            w = int(round(w * k))
+            h = int(round(h * k))
+        w = min(w, scr_geo.width())
+        h = min(h, scr_geo.height())
         x = max(scr_geo.x(), min(x, scr_geo.x() + scr_geo.width() - w))
         y = max(scr_geo.y(), min(y, scr_geo.y() + scr_geo.height() - h))
         self.setGeometry(QRect(x, y, w, h))
 
-        # 物理像素 → 面板坐标的缩放系数
-        self._scale = (self.width() / self._pixmap.width()) if self._pixmap.width() else 1.0
+        # 物理像素 → 面板坐标：等比缩放（绘制区域与命中检测共用同一映射）
+        self._draw_rect = self._fit_rect()
+        self._scale = (
+            self._draw_rect.width() / self._pixmap.width()
+            if self._pixmap.width() else 1.0
+        )
         self._dpr = dpr or 1.0
 
         self.toolbar = OnScreenToolbar(self)
@@ -168,7 +177,7 @@ class OnScreenResult(QWidget):
         )
         p.setClipPath(path)
 
-        p.drawPixmap(self.rect(), self._pixmap)
+        p.drawPixmap(self._draw_rect, self._pixmap)
 
         for idx, it in enumerate(self._items):
             box = it.get("box") or []
@@ -200,8 +209,22 @@ class OnScreenResult(QWidget):
         )
         p.end()
 
+    # ---------- 坐标映射 ----------
+    def _fit_rect(self) -> QRect:
+        """图片在面板内的绘制区域：等比缩放并居中（保证不拉伸变形）。"""
+        pw, ph = self._pixmap.width(), self._pixmap.height()
+        if pw <= 0 or ph <= 0:
+            return self.rect()
+        s = min(self.width() / pw, self.height() / ph)
+        dw, dh = max(1, int(round(pw * s))), max(1, int(round(ph * s)))
+        return QRect((self.width() - dw) // 2, (self.height() - dh) // 2, dw, dh)
+
     def _to_panel(self, pt) -> QPoint:
-        return QPoint(int(pt[0] * self._scale), int(pt[1] * self._scale))
+        dr = self._draw_rect
+        return QPoint(
+            int(round(dr.x() + pt[0] * self._scale)),
+            int(round(dr.y() + pt[1] * self._scale)),
+        )
 
     def _hit(self, pos: QPoint) -> int | None:
         for idx, it in enumerate(self._items):
@@ -320,7 +343,11 @@ class OnScreenResult(QWidget):
 
     def resizeEvent(self, ev):
         super().resizeEvent(ev)
-        self._scale = (self.width() / self._pixmap.width()) if self._pixmap.width() else 1.0
+        self._draw_rect = self._fit_rect()
+        self._scale = (
+            self._draw_rect.width() / self._pixmap.width()
+            if self._pixmap.width() else 1.0
+        )
         self._layout_toolbar()
 
     def showEvent(self, ev):

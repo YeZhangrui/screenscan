@@ -102,19 +102,34 @@ def test_tiny_region(app: QApplication) -> None:
     from src.onscreen_result import MIN_PANEL_H, MIN_PANEL_W
 
     screen = QGuiApplication.primaryScreen()
-    panel = OnScreenResult(make_pixmap(120, 40), ITEMS, screen, QRect(100, 100, 120, 40), dpr=1.0)
+    pm = make_pixmap(120, 40)
+    panel = OnScreenResult(pm, ITEMS, screen, QRect(100, 100, 120, 40), dpr=1.0)
     panel.show()
     app.processEvents()
     assert panel.width() >= MIN_PANEL_W, f"面板过小：{panel.width()}"
     assert panel.height() >= MIN_PANEL_H, f"面板过小：{panel.height()}"
     assert not panel.toolbar.geometry().intersects(panel.geometry()), "小区域时操作条压住面板"
 
+    # 关键：放大后必须保持原始宽高比（否则文字与识别框会错位）
+    ratio_panel = panel.width() / panel.height()
+    ratio_pixmap = pm.width() / pm.height()
+    assert abs(ratio_panel - ratio_pixmap) < 0.05, (
+        f"宽高比被改变：面板 {ratio_panel:.2f} vs 原图 {ratio_pixmap:.2f}"
+    )
+
+    # 关键：坐标映射必须与绘制区域一致（框与文字对齐）
+    dr = panel._draw_rect
+    assert panel._to_panel((0, 0)) == dr.topLeft(), "左上角映射不一致"
+    br = panel._to_panel((pm.width(), pm.height()))
+    assert abs(br.x() - (dr.x() + dr.width())) <= 1, "右下角 x 映射不一致"
+    assert abs(br.y() - (dr.y() + dr.height())) <= 1, "右下角 y 映射不一致"
+
     closed = {"v": False}
     panel.closed.connect(lambda: closed.update(v=True))
     QTest.mouseClick(panel.toolbar.btn_close, Qt.LeftButton)
     app.processEvents()
     assert closed["v"], "点「关闭」未关闭浮层"
-    print("PASS：极小区域可用性（放大 + 操作条在外 + 可关闭）")
+    print("PASS：极小区域可用性（等比放大 + 操作条在外 + 坐标对齐 + 可关闭）")
 
 
 def test_result_multiselect(app: QApplication, tmp: Path) -> None:

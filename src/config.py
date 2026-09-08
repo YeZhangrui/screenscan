@@ -7,7 +7,7 @@ from pathlib import Path
 
 APP_NAME = "ScreenScan"
 APP_TITLE = "屏幕扫描助手"
-APP_VERSION = "1.1.2"
+APP_VERSION = "1.1.3"
 
 DEFAULTS = {
     "hotkey_capture": "alt+s",        # 框选截图识别热键 (pynput 格式)
@@ -64,5 +64,6 @@ class Config:
     def set(self, key: str, value) -> None:
         self.data[key] = value
         self.save()
+
 
 
