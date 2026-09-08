@@ -107,6 +107,7 @@ class OnScreenResult(QWidget):
         self._screen = screen
         self._selected: set[int] = set()
         self._hover: int | None = None
+        self._anchor: int | None = None       # Shift 连选锚点
         self._band: QRect | None = None
         self._band_start: QPoint | None = None
         self._resize_edge: int = 0            # 1左 2右 4上 8下
@@ -160,6 +161,7 @@ class OnScreenResult(QWidget):
         self._error = ""
         self._selected.clear()
         self._hover = None
+        self._anchor = None
         self._update_status()
         self.update()
 
@@ -384,18 +386,25 @@ class OnScreenResult(QWidget):
             return
         hit = self._hit(pos)
         if hit is not None:
-            if ev.modifiers() & Qt.ControlModifier:
-                self._selected.symmetric_difference_update({hit})
+            mods = ev.modifiers()
+            if (mods & Qt.ShiftModifier) and self._anchor is not None:
+                # Shift + 点击：连选（按阅读顺序取区间）
+                lo, hi = sorted((self._anchor, hit))
+                self._selected = set(range(lo, hi + 1))
             else:
-                if hit in self._selected and len(self._selected) == 1:
-                    self._selected.clear()
+                # 单击即切换选中：不用按 Ctrl 也能连续点击多选，再点一次取消
+                if hit in self._selected:
+                    self._selected.discard(hit)
                 else:
-                    self._selected = {hit}
+                    self._selected.add(hit)
+            self._anchor = hit
             self._update_status()
             self.update()
             return
+        # 点空白处：清空选择并开始框选（按住 Ctrl 则保留已有选择）
         if not (ev.modifiers() & Qt.ControlModifier):
             self._selected.clear()
+            self._anchor = None
         self._band_start = pos
         self._band = QRect(pos, pos)
         self.update()
@@ -471,7 +480,8 @@ class OnScreenResult(QWidget):
         else:
             n = len(self._selected)
             self.toolbar.label_hint.setText(
-                f"已选 {n} 段文字" if n else "点击或拖拽框选文字 · 拖拽边缘可缩放"
+                f"已选 {n} 段文字（再点一次可取消）" if n
+                else "点击文字多选 · 拖拽框选 · 拖拽边缘缩放"
             )
             self.toolbar.btn_copy_sel.setText(f"复制选中（{n}）" if n else "复制选中")
             for b in self.toolbar._text_buttons:

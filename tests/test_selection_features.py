@@ -58,14 +58,46 @@ def test_onscreen(app: QApplication) -> None:
             f"{name}四角不透明：{[ (c.red(), c.green(), c.blue(), c.alpha()) for c in corners ]}"
         )
 
-    # 1) 点击第 1 段 → 选中 1 段 → 复制
+    # 1) 单击第 1 段 → 选中 1 段 → 复制
     QTest.mouseClick(panel, Qt.LeftButton, Qt.NoModifier, QPoint(60, 25))
     app.processEvents()
     assert panel._selected == {0}, panel._selected
     panel.copy_selected()
     assert QGuiApplication.clipboard().text() == "第一段文字"
 
-    # 2) Ctrl+点击第 2 段 → 多选 2 段
+    # 1.1) 不按 Ctrl 直接点第 2 段 → 累加多选（本次需求重点）
+    QTest.mouseClick(panel, Qt.LeftButton, Qt.NoModifier, QPoint(60, 75))
+    app.processEvents()
+    assert panel._selected == {0, 1}, panel._selected
+    panel.copy_selected()
+    assert QGuiApplication.clipboard().text() == "第一段文字\n第二段文字"
+
+    # 1.2) 再点第 2 段一次 → 取消该段
+    QTest.mouseClick(panel, Qt.LeftButton, Qt.NoModifier, QPoint(60, 75))
+    app.processEvents()
+    assert panel._selected == {0}, panel._selected
+
+    # 1.3) Shift + 点击第 3 段 → 从上次点击（第 2 段）连选到第 3 段
+    QTest.mouseClick(panel, Qt.LeftButton, Qt.ShiftModifier, QPoint(60, 125))
+    app.processEvents()
+    assert panel._selected == {1, 2}, panel._selected
+
+    # 1.4) 点空白处 → 清空选择
+    QTest.mouseClick(panel, Qt.LeftButton, Qt.NoModifier, QPoint(320, 180))
+    app.processEvents()
+    assert panel._selected == set(), panel._selected
+
+    # 1.5) 单击第 1 段后 Shift + 点击第 3 段 → 连选 1~3 段
+    QTest.mouseClick(panel, Qt.LeftButton, Qt.NoModifier, QPoint(60, 25))
+    QTest.mouseClick(panel, Qt.LeftButton, Qt.ShiftModifier, QPoint(60, 125))
+    app.processEvents()
+    assert panel._selected == {0, 1, 2}, panel._selected
+
+    # 2) Ctrl+点击方式保留可用（先点空白清空）
+    QTest.mouseClick(panel, Qt.LeftButton, Qt.NoModifier, QPoint(320, 180))
+    app.processEvents()
+    assert panel._selected == set()
+    QTest.mouseClick(panel, Qt.LeftButton, Qt.NoModifier, QPoint(60, 25))
     QTest.mouseClick(panel, Qt.LeftButton, Qt.ControlModifier, QPoint(60, 75))
     app.processEvents()
     assert panel._selected == {0, 1}, panel._selected
