@@ -227,16 +227,18 @@ QCheckBox::indicator {{
 QCheckBox::indicator:hover {{ border-color: {p.primary}; }}
 QCheckBox::indicator:checked {{ background: {p.primary}; border-color: {p.primary}; }}
 QRadioButton::indicator {{
-    width: 15px; height: 15px;
+    width: 16px; height: 16px;
     border: 1px solid {p.border_strong};
     border-radius: 8px;
     background: {p.card};
 }}
 QRadioButton::indicator:hover {{ border-color: {p.primary}; }}
 QRadioButton::indicator:checked {{
-    background: {p.primary};
-    border: 4px solid {p.card};
-    outline: 1px solid {p.primary};
+    /* 固定尺寸 + 径向渐变圆点：不改变控件大小，避免文字被挤掉 */
+    background: qradialgradient(cx:0.5, cy:0.5, radius:0.5, fx:0.5, fy:0.5,
+        stop:0 {p.primary}, stop:0.42 {p.primary},
+        stop:0.46 {p.card}, stop:1 {p.card});
+    border: 1px solid {p.primary};
 }}
 
 /* —— 滚动条 —— */

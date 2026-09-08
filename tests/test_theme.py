@@ -22,6 +22,7 @@ from src.theme import (
     DARK,
     LIGHT,
     MODE_DARK,
+    MODE_LABELS,
     MODE_LIGHT,
     MODE_SYSTEM,
     apply_theme,
@@ -76,9 +77,21 @@ def main() -> int:
     assert dlg.selected_theme() == MODE_SYSTEM
     dlg.theme_buttons[MODE_DARK].setChecked(True)
     assert dlg.selected_theme() == MODE_DARK
+
+    # 5.1) 主题单选按钮不得被挤压/截断（回归：深色二字显示不全）
+    dlg.show()
+    app.processEvents()
+    for mode, btn in dlg.theme_buttons.items():
+        assert btn.width() >= btn.sizeHint().width(), (
+            f"{MODE_LABELS[mode]} 按钮被压缩：宽 {btn.width()} < 建议 {btn.sizeHint().width()}"
+        )
+        assert btn.geometry().right() <= dlg.width(), (
+            f"{MODE_LABELS[mode]} 超出对话框右边界"
+        )
+    dlg.close()
+
     config.set("theme", dlg.selected_theme())
     assert Config(path=tmp / "config.json").get("theme") == MODE_DARK
-    dlg.close()
 
     print("PASS：主题系统测试通过（浅色/深色/跟随系统）")
     return 0

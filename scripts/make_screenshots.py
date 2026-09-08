@@ -63,6 +63,15 @@ def main() -> int:
         result_win.grab().save(str(OUT / f"result{suffix}.png"), "PNG")
         result_win.close()
 
+        # —— 设置窗口（含主题三选项） ——
+        from src.settings_window import SettingsDialog
+
+        dlg = SettingsDialog(config, lambda c, f: None, main_win)
+        dlg.show()
+        app.processEvents()
+        dlg.grab().save(str(OUT / f"settings{suffix}.png"), "PNG")
+        dlg.close()
+
     # —— 屏幕浮层（就地选择，深色样式不随主题变化） ——
     apply_theme(app, MODE_LIGHT)
     from PySide6.QtCore import QRect

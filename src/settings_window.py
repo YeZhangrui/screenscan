@@ -36,7 +36,7 @@ class SettingsDialog(QDialog):
         self._apply_cb = hotkey_apply_cb
         self.setWindowTitle("设置 — 屏幕扫描助手")
         self.setModal(True)
-        self.resize(460, 260)
+        self.resize(540, 320)
         self._build_ui()
 
     def _build_ui(self) -> None:
