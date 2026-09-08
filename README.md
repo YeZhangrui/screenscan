@@ -3,6 +3,11 @@
 > 一款常驻后台的屏幕识别小工具：按快捷键框选屏幕区域（或上传图片），自动识别其中的**文字与图片**，一键复制。
 > 全部识别在**本地离线**完成，内容不上传网络，断网可用。
 
+## 下载
+
+- **免安装版**：到 [Releases](../../releases) 页面下载 `屏幕扫描助手.exe`，双击即用（Windows 11，无需安装 Python 或任何环境）
+- 想自己改代码：克隆本仓库后 `pip install PySide6 rapidocr omegaconf pynput pillow numpy pyinstaller`，运行 `python main.py`；打包用 `build.ps1`
+
 ## 一、安装
 
 **无需安装**：双击 `屏幕扫描助手.exe` 即可使用（首次启动约 1~3 秒加载识别引擎）。
