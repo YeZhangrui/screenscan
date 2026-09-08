@@ -146,10 +146,15 @@ class ResultWindow(QWidget):
         self.activateWindow()
 
     def _apply_pin(self, pinned: bool, silent: bool = False) -> None:
+        """应用置顶开关。注意：setWindowFlag 会让窗口隐藏，只有原本可见时才重新 show，
+
+        否则切换主题/保存设置时会把没打开过的结果窗弹出来。
+        """
+        was_visible = self.isVisible()
         self._pinned = pinned
         self.setWindowFlag(Qt.WindowStaysOnTopHint, pinned)
         self.btn_pin.setChecked(pinned)
-        if not silent:
+        if was_visible and not silent:
             self.show()
 
     # ---------- 文字 ----------
@@ -293,4 +298,5 @@ class ResultWindow(QWidget):
         self._apply_pin(on)
 
     def ensure_pin(self) -> None:
+        """同步设置中的置顶开关（不改变窗口可见性）。"""
         self._apply_pin(bool(self._config.get("pin_result", True)))

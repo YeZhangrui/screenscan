@@ -255,6 +255,21 @@ def test_result_multiselect(app: QApplication, tmp: Path) -> None:
     # 复制全部仍可用
     win.copy_all_text()
     assert QGuiApplication.clipboard().text().count("\n") == 2
+
+    # 回归：隐藏状态下同步置顶开关（如切换主题/保存设置）不得把窗口弹出来
+    win.hide()
+    app.processEvents()
+    assert not win.isVisible()
+    win.ensure_pin()
+    app.processEvents()
+    assert not win.isVisible(), "ensure_pin() 不应让隐藏的结果窗弹出"
+
+    # 可见时切换置顶应保持可见
+    win.show()
+    app.processEvents()
+    win.btn_pin.setChecked(not win.btn_pin.isChecked())
+    app.processEvents()
+    assert win.isVisible(), "可见时切换置顶不应导致窗口消失"
     print("PASS：结果窗多选复制")
 
 
